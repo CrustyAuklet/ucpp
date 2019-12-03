@@ -1,9 +1,14 @@
 #pragma once
+
 #include <stdint.h>
 #include <utility>
-#include <tuple>
+#include <algorithm>
 
 namespace ucpp::registers {
+
+using registerType = uint8_t;
+using addressType  = uint16_t;
+
 struct read_only{};
 struct read_write{};
 template<typename T>
@@ -31,15 +36,15 @@ struct bitfield_value_t
     T mask;
     friend inline constexpr auto operator|(const bitfield_value_t& lhs, const bitfield_value_t& rhs)
     {
-        return bitfield_value_t<T>{lhs.value | rhs.value, lhs.mask|rhs.mask};
+        return bitfield_value_t<T>{static_cast<T>(lhs.value | rhs.value), static_cast<T>(lhs.mask|rhs.mask)};
     }
 
     friend inline constexpr auto operator|=(const bitfield_value_t& lhs, const bitfield_value_t& rhs)
     {
-        return bitfield_value_t<T>{lhs.value | rhs.value, lhs.mask|rhs.mask};
+        return bitfield_value_t<T>{static_cast<T>(lhs.value | rhs.value), static_cast<T>(lhs.mask|rhs.mask)};
     }
 
-    friend inline constexpr auto operator|(int lhs, const bitfield_value_t& rhs)
+    friend inline constexpr auto operator|(T lhs, const bitfield_value_t& rhs)
     {
         return lhs | rhs.value;
     }
@@ -116,25 +121,25 @@ namespace details {
     }
 }
 
-template <typename reg_type, int start_index, int stop_index=start_index, typename value_t=int, typename access_type=read_write>
+template <typename reg_type, int start_index, int stop_index=start_index, typename value_t=registerType, typename access_type=read_write>
 struct bitfield_t
 {
     using reg_t = reg_type;
     using type = typename reg_t::type;
     static constexpr const int start = std::min(start_index, stop_index);
     static constexpr const int stop = std::max(start_index, stop_index);
-    static constexpr const typename reg_t::type mask = details::compute_mask<typename reg_t::type, start, stop>();
+    static constexpr const type mask = details::compute_mask<type, start, stop>();
     inline static constexpr bool readonly = is_read_only_v<access_type>;
 
     static constexpr bitfield_value_t<type> shift(const value_t value) noexcept
     {
-        return {(static_cast<type>(value)<<start) & mask, mask};
+        return {static_cast<type>((static_cast<type>(value)<<start) & mask), mask};
     }
 
     inline constexpr bitfield_t operator=(const value_t& value) const noexcept
     {
         static_assert (!readonly,"this bit field is read-only");
-        typename reg_t::type tmp = shift(value).value;
+        type tmp = shift(value).value;
         reg_t::value() = (reg_t::value() &  ~mask)|tmp;
         return bitfield_t<reg_t,start_index,stop_index,value_t>{};
     }
